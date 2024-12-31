@@ -1,24 +1,13 @@
-const { app, BrowserWindow, session } = require('electron');
+const { app, BrowserWindow } = require('electron');
 const path = require('path');
-const config = require('./webrtc-config');
 
+// Force Chrome version
 app.commandLine.appendSwitch('chrome-version', '102.0.0.0');
 
 function createWindow() {
-  // WebRTC configuration
-  app.commandLine.appendSwitch('force-webrtc-ip-handling-policy', 'default_public_interface_only');
-  app.commandLine.appendSwitch('enable-features', 'WebRTC-H264WithOpenH264FFmpeg');
-  app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-H264Simulcast/Enabled/');
-
-  // Set Android user agent
-  session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-    details.requestHeaders['User-Agent'] = config.userAgent;
-    callback({ requestHeaders: details.requestHeaders });
-  });
-
   const mainWindow = new BrowserWindow({
-    width: config.webrtc.resolution.width,
-    height: config.webrtc.resolution.height,
+    width: 1280,
+    height: 720,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: false,
@@ -26,21 +15,22 @@ function createWindow() {
     }
   });
 
+  // ✅ DevTools enabled
+  mainWindow.webContents.openDevTools();
+  // ✅ Loads Xbox URL
   mainWindow.loadURL('https://xbox.com');
 }
 
-app.whenReady().then(() => {
-  createWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
-});
+app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
   }
 });

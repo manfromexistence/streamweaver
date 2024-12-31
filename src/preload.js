@@ -1,56 +1,41 @@
-const { app, BrowserWindow } = require('electron')
-const path = require('path')
-const config = require('./webrtc-config');
-
-function createWindow() {
-  const mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+const deviceInfo = {
+  appInfo: {
+    env: {
+      clientAppId: 'www.xbox.com',
+      clientAppType: 'browser',
+      clientAppVersion: '26.1.97',
+      clientSdkVersion: '10.3.7',
+      httpEnvironment: 'prod'
     }
-  })
-
-  mainWindow.loadURL('https://xbox.com')
-}
-
-const modifySdp = (sdp) => {
-  sdp = sdp.replace(/a=imageattr:.*\r\n/g, '');
-  sdp += `a=imageattr:* recv [x=[0-${config.webrtc.resolution.width}],y=[0-${config.webrtc.resolution.height}]]\r\n`;
-  sdp = sdp.replace(/(a=fmtp:\d+ .*)\r\n/g, 
-    `$1;x-google-max-bitrate=${config.webrtc.bitrate.max};x-google-min-bitrate=${config.webrtc.bitrate.min}\r\n`);
-  return sdp;
+  },
+  dev: {
+    os: { name: 'android', ver: '13.0', platform: 'mobile' },
+    hw: { make: 'Samsung', model: 'SM-T970', sdktype: 'web' },
+    displayInfo: {
+      dimensions: { widthInPixels: 1280, heightInPixels: 720 },
+      pixelDensity: { dpiX: 1, dpiY: 1 }
+    },
+    browser: { browserName: 'chrome', browserVersion: '116.0.0.0' }
+  }
 };
 
 window.addEventListener('load', () => {
-  const originalRTCPeerConnection = window.RTCPeerConnection;
-  window.RTCPeerConnection = function(...args) {
-    const pc = new originalRTCPeerConnection(...args);
-    
-    const originalCreateOffer = pc.createOffer.bind(pc);
-    pc.createOffer = async (...args) => {
-      const offer = await originalCreateOffer(...args);
-      offer.sdp = modifySdp(offer.sdp);
-      return offer;
-    };
-    
-    return pc;
+  localStorage.setItem('deviceInfo', JSON.stringify(deviceInfo));
+  
+  Object.defineProperty(navigator, 'platform', { get: () => 'Android' });
+  Object.defineProperty(navigator, 'userAgent', { 
+    get: () => 'Mozilla/5.0 (Linux; Android 13; SM-T970) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36'
+  });
+
+  const originalXHR = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url) {
+    if(url.includes('/sessions/cloud/play') || url.includes('/configuration') || url.includes('/ice')) {
+      this.addEventListener('readystatechange', function() {
+        if(this.readyState === 1) {
+          this.setRequestHeader('x-ms-device-info', localStorage.getItem('deviceInfo'));
+        }
+      });
+    }
+    return originalXHR.apply(this, arguments);
   };
 });
-
-app.whenReady().then(() => {
-  createWindow()
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    }
-  })
-})
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
-})
